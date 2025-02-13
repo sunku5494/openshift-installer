@@ -111,7 +111,11 @@ func ValidateInstallConfig(c *types.InstallConfig, usingAgentMethod bool) field.
 		allErrs = append(allErrs, validateNetworking(c.Networking, c.IsSingleNodeOpenShift(), field.NewPath("networking"))...)
 		allErrs = append(allErrs, validateNetworkingIPVersion(c.Networking, &c.Platform)...)
 		allErrs = append(allErrs, validateNetworkingForPlatform(c.Networking, &c.Platform, field.NewPath("networking"))...)
-		allErrs = append(allErrs, validateVIPsForPlatform(c.Networking, &c.Platform, field.NewPath("platform"))...)
+		if usingAgentMethod && c.Platform.VSphere != nil {
+			allErrs = append(allErrs, validateVIPsForVsphere(c.Networking, &c.Platform, field.NewPath("platform"))...)
+		} else {
+			allErrs = append(allErrs, validateVIPsForPlatform(c.Networking, &c.Platform, field.NewPath("platform"))...)
+		}
 	} else {
 		allErrs = append(allErrs, field.Required(field.NewPath("networking"), "networking is required"))
 	}
@@ -571,6 +575,25 @@ func validateVIPsForPlatform(network *types.Networking, platform *types.Platform
 	default:
 		//no vips to validate on this platform
 	}
+
+	return allErrs
+}
+
+// validateVIPsForPlatform validates the VIPs (for API and Ingress) for the
+// given VSphere platform
+func validateVIPsForVsphere(network *types.Networking, platform *types.Platform, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	virtualIPs := vips{
+		API:     platform.VSphere.APIVIPs,
+		Ingress: platform.VSphere.IngressVIPs,
+	}
+
+	newVIPsFields := vipFields{
+		APIVIPs:     "apiVIPs",
+		IngressVIPs: "ingressVIPs",
+	}
+	allErrs = append(allErrs, validateAPIAndIngressVIPs(virtualIPs, newVIPsFields, true, true, network, fldPath.Child(vsphere.Name))...)
 
 	return allErrs
 }
